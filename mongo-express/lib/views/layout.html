@@ -36,10 +36,10 @@
       <div class="dark-mode-toggle">
         <i id="darkModeIcon" class="fa fa-moon"></i>
       </div>
-      {% if enableLogout %}
-      <div class="logout">
-        <a href="{{ baseHref }}logout" class="btn">
-          <i class="fas fa-sign-out-alt"></i>
+      {% if isAuthenticated and currentPath != '/login' %}
+      <div class="logout ms-2">
+        <a href="{{ baseHref }}logout" class="btn btn-link text-muted" title="Logout" data-bs-toggle="tooltip" data-bs-placement="bottom">
+          <i class="fas fa-door-open"></i>
         </a>
       </div>
       {% endif %}
@@ -93,6 +93,15 @@
   };
 </script>
 {% block scripts %}
+<script>
+  // Инициализация tooltip для Bootstrap
+  document.addEventListener('DOMContentLoaded', function () {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+      new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  });
+</script>
 {% endblock %}
 </body>
 </html>
