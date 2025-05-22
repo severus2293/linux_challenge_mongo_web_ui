@@ -36,7 +36,7 @@
     "@lezer/highlight": "^1.2.1",
     "@popperjs/core": "^2.11.8",
     "basic-auth-connect": "^1.1.0",
-    "body-parser": "^1.20.2",
+    "body-parser": "^1.20.3",
     "bootstrap": "^5.3.6",
     "bootstrap-paginator-2": "^2.0.0",
     "bson": "^6.10.3",
@@ -62,7 +62,13 @@
     "morgan": "^1.10.0",
     "picocolors": "^1.1.1",
     "renderjson-2": "^2.0.1",
-    "serve-favicon": "^2.5.0"
+    "serve-favicon": "^2.5.0",
+    "passport": "=0.6.0",
+    "passport-local": "=1.0.0",
+    "bcryptjs": "=3.0.2",
+    "uuid": "=8.3.2",
+    "winston": "=3.8.1",
+    "node-cron": "=3.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.27.1",
