@@ -9,6 +9,8 @@ import { program } from 'commander';
 import csrf from 'csurf';
 import express from 'express';
 import middleware from './lib/middleware.js';
+import { initMongoClient } from './lib/initAdminClient.js';
+import { initTempDb } from './lib/temp_db/tempDb.js';
 import { deepmerge } from './lib/utils.js';
 import configDefault from './config.default.js';
 
@@ -44,6 +46,8 @@ const loadConfig = async () => {
 
 async function bootstrap(config) {
   const resolvedMiddleware = await middleware(config);
+  await initMongoClient();
+  await initTempDb();
   app.use(config.site.baseUrl, resolvedMiddleware);
   app.use(config.site.baseUrl, process.env.NODE_ENV === 'test' ? csrf({ ignoreMethods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'] })
     : csrf({ cookie: true }));

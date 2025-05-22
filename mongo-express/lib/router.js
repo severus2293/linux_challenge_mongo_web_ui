@@ -9,13 +9,15 @@ import logger from 'morgan';
 import methodOverride from 'method-override';
 import mongodb from 'mongodb';
 import pico from 'picocolors';
-
+import passport from 'passport';
 import session from 'express-session';
 import memorystore from 'memorystore';
 import csrf from 'csurf';
 import db from './db.js';
 import routes from './routes/index.js';
 import { buildCollectionURL, buildDatabaseURL, colsToGrid } from './utils.js';
+import { authMiddleware, loginGetHandler, loginPostHandler, logoutGetHandler, handleQueryAuth } from './auth.js';
+import { tempDbRoutes } from './temp_db/tempDb.js';
 
 const MemoryStore = memorystore(session);
 
@@ -116,6 +118,10 @@ const router = async function (config) {
       checkPeriod: 86400000,  // prune expired entries every 24h
     }),
   }));
+  
+  // Инициализация Passport
+  appRouter.use(passport.initialize());
+  appRouter.use(passport.session());
 
   appRouter.use(process.env.NODE_ENV === 'test' ? csrf({ ignoreMethods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'] })
     : csrf({ cookie: true }));
@@ -132,10 +138,29 @@ const router = async function (config) {
   if (process.env.NODE_ENV === 'development') {
     appRouter.use(errorHandler());
   }
+  
+  // Подключаем маршруты для временных баз
+  tempDbRoutes(appRouter);
+  // Обработка авторизации и выхода
+  appRouter.get('/login', loginGetHandler);
+  appRouter.post('/login', loginPostHandler(config));
+  appRouter.get('/logout', logoutGetHandler);
+  appRouter.use(handleQueryAuth);
+  
+  appRouter.use(authMiddleware(config));
 
   // View helper, sets local variables used in templates
   appRouter.all('*', async function (req, res, next) {
-    if (mongo === null) {
+    res.locals.isAuthenticated = req.isAuthenticated();
+    res.locals.currentPath = req.path;
+    // Проверяем, аутентифицирован ли пользователь и есть ли его подключение в кеше
+    if (req.isAuthenticated() && global.mongoCache[req.user._id.toString()]) {
+      req.mongo = global.mongoCache[req.user._id.toString()];
+    } else if (mongo !== null) {
+      // Для неаутентифицированных пользователей или админов используем общий mongo
+      req.mongo = mongo;
+    } else {
+      // Если mongo не инициализирован, обрабатываем подключение
       const connection = new URL(config.mongodb.connectionString);
       if (req.method === 'POST') {
         const {
@@ -160,17 +185,15 @@ const router = async function (config) {
 
       return res.render('login', {
         csrfToken: req.csrfToken(),
-        authSource: connection.searchParams.get('authSource') ?? '',
         username: connection.username,
         password: PASSWORD_PLACEHOLDER,
-        hostname: connection.hostname,
-        port: connection.port,
+        errorMessage: 'MongoDB not initialized',
       });
     }
     res.locals.baseHref = buildBaseHref(req.originalUrl, req.url);
-    res.locals.databases = mongo.getDatabases();
-    res.locals.collections = mongo.collections;
-    res.locals.gridFSBuckets = colsToGrid(mongo.collections);
+    res.locals.databases = req.mongo.getDatabases();
+    res.locals.collections = req.mongo.collections;
+    res.locals.gridFSBuckets = colsToGrid(req.mongo.collections);
     res.locals.enableLogout = config.useOidcAuth;
 
     // Flash messages
@@ -184,8 +207,8 @@ const router = async function (config) {
       delete req.session.error;
     }
 
-    await mongo.updateDatabases().then(() => {
-      res.locals.databases = mongo.getDatabases();
+    await req.mongo.updateDatabases().then(() => {
+      res.locals.databases = req.mongo.getDatabases();
       next();
     }).catch(next);
   });
@@ -193,7 +216,7 @@ const router = async function (config) {
   // route param pre-conditions
   appRouter.param('database', function (req, res, next, id) {
     // Make sure database exists
-    if (!mongo.connections[id]) {
+    if (!req.mongo.connections[id]) {
       req.session.error = 'Database not found!';
       return res.redirect(res.locals.baseHref);
     }
@@ -202,8 +225,8 @@ const router = async function (config) {
     res.locals.dbName = id;
     res.locals.dbUrl = buildDatabaseURL(res.locals.baseHref, id);
 
-    req.dbConnection = mongo.connections[id];
-    req.db = mongo.connections[id].db;
+    req.dbConnection = req.mongo.connections[id];
+    req.db = req.mongo.connections[id].db;
     next();
   });
 
@@ -211,7 +234,7 @@ const router = async function (config) {
   appRouter.param('collection', function (req, res, next, id) {
     // Make sure collection exists
 
-    if (!mongo.collections[req.dbName].includes(id)) {
+    if (!req.mongo.collections[req.dbName].includes(id)) {
       req.session.error = 'Collection not found!';
       return res.redirect(res.locals.baseHref + 'db/' + req.dbName);
     }
@@ -220,10 +243,10 @@ const router = async function (config) {
     res.locals.collectionName = id;
     res.locals.collectionUrl = buildCollectionURL(res.locals.baseHref, res.locals.dbName, id);
 
-    res.locals.collections = mongo.collections[req.dbName];
-    res.locals.gridFSBuckets = colsToGrid(mongo.collections[req.dbName]);
+    res.locals.collections = req.mongo.collections[req.dbName];
+    res.locals.gridFSBuckets = colsToGrid(req.mongo.collections[req.dbName]);
 
-    const coll = mongo.connections[req.dbName].db.collection(id);
+    const coll = req.mongo.connections[req.dbName].db.collection(id);
 
     if (coll === null) {
       req.session.error = 'Collection not found!';
@@ -279,8 +302,7 @@ const router = async function (config) {
   appRouter.param('bucket', async function (req, res, next, id) {
     req.bucketName = id;
     res.locals.bucketName = id;
-
-    await mongo.connections[req.dbName].collection(id + '.files').then(async (filesConn) => {
+    await req.mongo.connections[req.dbName].collection(id + '.files').then(async (filesConn) => {
       if (filesConn === null) {
         req.session.error = id + '.files collection not found!';
         return res.redirect(res.locals.baseHref + 'db/' + req.dbName);
@@ -312,15 +334,19 @@ const router = async function (config) {
 
   // mongodb mongoMiddleware
   const mongoMiddleware = function (req, res, next) {
-    req.mainClient = mongo.mainClient;
-    req.adminDb = mongo.mainClient.adminDb || undefined;
-    req.databases = mongo.getDatabases(); // List of database names
-    req.collections = mongo.collections; // List of collection names in all databases
-    req.gridFSBuckets = colsToGrid(mongo.collections);
+    if (req.user && global.mongoCache && global.mongoCache[req.user._id.toString()]) {
+      // Для аутентифицированных пользователей используем персональное подключение
+      const mongo = global.mongoCache[req.user._id.toString()];
+      req.mainClient = mongo.mainClient;
+      req.adminDb = mongo.mainClient.adminDb || undefined;
+      req.databases = mongo.getDatabases(); // List of database names
+      req.collections = mongo.collections; // List of collection names in all databases
+      req.gridFSBuckets = colsToGrid(mongo.collections);
 
-    // Allow page handlers to request an update for collection list
-    req.updateCollections = mongo.updateCollections;
-    req.updateDatabases = mongo.updateDatabases;
+      // Allow page handlers to request an update for collection list
+      req.updateCollections = mongo.updateCollections;
+      req.updateDatabases = mongo.updateDatabases;
+    }
 
     next();
   };
