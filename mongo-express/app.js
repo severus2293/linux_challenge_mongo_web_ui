@@ -48,7 +48,7 @@ async function bootstrap(config) {
   const resolvedMiddleware = await middleware(config);
   await initMongoClient();
   await initTempDb();
-  app.use(config.site.baseUrl, resolvedMiddleware);
+  app.use('/', resolvedMiddleware);
   app.use(config.site.baseUrl, process.env.NODE_ENV === 'test' ? csrf({ ignoreMethods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT'] })
     : csrf({ cookie: true }));
 

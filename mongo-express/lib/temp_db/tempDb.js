@@ -54,7 +54,7 @@ export async function initTempDb() {
 
     // Проверяем наличие админа
     const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
-    const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || null;
+    const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || 'admin_hash';
     const existingAdmin = await db.collection(usersCollectionName).findOne({ type: 'admin', username: ADMIN_USERNAME });
     if (!existingAdmin) {
       if (!ADMIN_PASSWORD_HASH) {

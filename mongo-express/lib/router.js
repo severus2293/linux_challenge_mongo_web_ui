@@ -190,7 +190,7 @@ const router = async function (config) {
         errorMessage: 'MongoDB not initialized',
       });
     }
-    res.locals.baseHref = buildBaseHref(req.originalUrl, req.url);
+  res.locals.baseHref = config.site.baseUrl != "/" ? config.site.baseUrl : buildBaseHref(req.originalUrl, req.url);
     res.locals.databases = req.mongo.getDatabases();
     res.locals.collections = req.mongo.collections;
     res.locals.gridFSBuckets = colsToGrid(req.mongo.collections);
