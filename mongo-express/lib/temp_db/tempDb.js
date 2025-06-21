@@ -16,7 +16,7 @@ const logger = winston.createLogger({
 });
 
 // Настройки
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'default_admin_token';
+const ADMIN_TOKEN = process.env.MONGO_ADMIN_TOKEN || 'default_admin_token';
 const metaCollectionName = 'meta';
 const usersCollectionName = 'appUsers';
 
