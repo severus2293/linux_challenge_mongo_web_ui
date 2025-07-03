@@ -50,11 +50,13 @@ const connect = async function (config) {
           for (let i = 0; i < allDbs.databases.length; ++i) {
             const dbName = allDbs.databases[i].name;
             if (dbName) {
-              if (connectionInfo.info.whitelist.length > 0 && !connectionInfo.info.whitelist.includes(dbName)) {
+              const whitelist = connectionInfo.info.whitelist || [];
+              const blacklist = connectionInfo.info.blacklist || [];
+              if (whitelist.length > 0 && !whitelist.includes(dbName)) {
                 continue;
               }
 
-              if (connectionInfo.info.blacklist.length > 0 && connectionInfo.info.blacklist.includes(dbName)) {
+              if (blacklist.length > 0 && blacklist.includes(dbName)) {
                 continue;
               }
               const connection = addConnection(connectionInfo.client.db(dbName), dbName);

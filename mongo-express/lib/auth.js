@@ -7,6 +7,7 @@ import { mongoClient } from './initAdminClient.js';
 
 // Глобальный кеш для хранения подключений пользователей
 global.mongoCache = global.mongoCache || {};
+let cachedAdminHash = null;
 
 passport.use(
   new LocalStrategy(async (username, password, done) => {
@@ -14,34 +15,77 @@ passport.use(
       if (!mongoClient) {
         return done(new Error('MongoDB client not initialized'));
       }
-      const db = mongoClient.db('temp_dbs');
-      const user = await db.collection('appUsers').findOne({ username });
-      if (!user) {
-        return done(null, false, { message: 'Неверные данные' });
-      }
-      const match = await bcrypt.compare(password, user.passwordHash);
-      if (!match) {
-        return done(null, false, { message: 'Неверные данные' });
-      }
-      // Формируем персональный конфиг
-      const newUserConfig = {
-        mongodb: {
-          connectionString: `mongodb://${username}:${password}@localhost:27017/${user.dbName}?authSource=${user.dbName}`,
-          connectionName: user.username,
-          admin: false,
-          connectionOptions: {},
-        },
-      };
 
-      // Создаём и сохраняем подключение
-      const userMongo = await dbConnect(newUserConfig);
-      global.mongoCache[user._id.toString()] = userMongo;
-      return done(null, user);
+      // Пробуем авторизовать как админа
+      const adminResult = await tryLoginAdmin(username, password);
+      if (adminResult) return done(null, adminResult);
+
+      // Пробуем авторизовать как обычного пользователя
+      const userResult = await tryLoginUser(username, password);
+      if (userResult) return done(null, userResult);
+
+      // Ни один не подошёл
+      return done(null, false, { message: 'Неверные данные' });
     } catch (err) {
       return done(err);
     }
   })
 );
+
+async function tryLoginAdmin(username, password) {
+  const mongoUser = process.env.MONGO_INITDB_ROOT_USERNAME || 'mongo';
+  const mongoPass = process.env.MONGO_INITDB_ROOT_PASSWORD || 'mongo';
+
+  if (username !== mongoUser) return null;
+
+  if (!cachedAdminHash) {
+    cachedAdminHash = await bcrypt.hash(mongoPass, 10);
+  }
+
+  const match = await bcrypt.compare(password, cachedAdminHash);
+  if (!match) return null;
+
+  const adminConfig = {
+    mongodb: {
+      connectionString: `mongodb://${mongoUser}:${mongoPass}@localhost:27017/?authSource=admin`,
+      connectionName: mongoUser,
+      admin: true,
+      connectionOptions: {},
+    },
+  };
+
+  const adminMongo = await dbConnect(adminConfig);
+  global.mongoCache['admin'] = adminMongo;
+
+  return {
+    _id: 'admin',
+    username: mongoUser,
+    isAdmin: true,
+  };
+}
+
+async function tryLoginUser(username, password) {
+  const db = mongoClient.db('temp_dbs');
+  const user = await db.collection('appUsers').findOne({ username });
+  if (!user) return null;
+
+  const match = await bcrypt.compare(password, user.passwordHash);
+  if (!match) return null;
+
+  const newUserConfig = {
+    mongodb: {
+      connectionString: `mongodb://${username}:${password}@localhost:27017/${user.dbName}?authSource=${user.dbName}`,
+      connectionName: user.username,
+      admin: false,
+      connectionOptions: {},
+    },
+  };
+
+  const userMongo = await dbConnect(newUserConfig);
+  global.mongoCache[user._id.toString()] = userMongo;
+
+  return user;
+}
 
 passport.serializeUser((user, done) => {
   done(null, user._id.toString());
@@ -50,7 +94,15 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
   try {
     if (!mongoClient) {
-      return done(new Error('MongoDB client not initialized'));
+        return done(new Error('MongoDB client not initialized'));
+    }
+    if (id === 'admin') {
+      const mongoUser = process.env.MONGO_INITDB_ROOT_USERNAME || 'mongo';
+      return done(null, {
+        _id: 'admin',
+        username: mongoUser,
+        isAdmin: true,
+      });
     }
     const db = mongoClient.db('temp_dbs');
     const user = await db.collection('appUsers').findOne({ _id: new mongodb.ObjectId(id) });
