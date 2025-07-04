@@ -146,12 +146,26 @@ export function logoutGetHandler(req,res){
 }
 
 export function loginPostHandler(config) {
-  return passport.authenticate('local', {
-    successRedirect: '/',
-    failureRedirect: '/login',
-    failureFlash: false,
-    failureMessage: true,
-  });
+  return async (req, res, next) => {
+    passport.authenticate('local', (err, user, info) => {
+      if (err) return next(err);
+
+      if (!user) {
+        // сохраняем ошибку и значения
+        return res.render('login', {
+          csrfToken: req.csrfToken(),
+          errorMessage: 'Пользователь не обнаружен в системе',
+          username: req.body.username,
+          password: req.body.password,
+        });
+      }
+
+      req.logIn(user, (err) => {
+        if (err) return next(err);
+        res.redirect('/');
+      });
+    })(req, res, next);
+  };
 }
 
 export function handleQueryAuth(req, res, next) {

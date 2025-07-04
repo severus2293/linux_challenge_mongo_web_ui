@@ -4,60 +4,118 @@
 
 {% block content %}
 <div class="login-container">
-  <div class="logo">
-    <img src="{{ baseHref }}public/img/mongo-express-logo.png" alt="MongoDB" />
-  </div>
-  {% if errorMessage %}
-    <div style="color: red; margin-bottom: 1em;">
-      {{ errorMessage }}
+    <div class="logo">
+        <img src="{{ baseHref }}public/img/mongo-express-logo.png" alt="MongoDB"/>
     </div>
-  {% endif %}
-  <form method="POST" action="/login">
-    <input type="hidden" name="_csrf" value="{{ csrfToken }}" />
-    <input type="text" name="username" placeholder="Username" required value="{{ username }}" />
-    <input style="margin-top: 5px" type="password" name="password" placeholder="Password" required value="{{ password }}" />
-    <button style="margin-top: 5px" type="submit">Login</button>
-  </form>
+<div id="spinner" style="display:none; margin: 20px auto;">
+  <svg style="width:48px;height:48px;" viewBox="0 0 50 50" class="rotating-spinner">
+    <circle
+      cx="25"
+      cy="25"
+      r="20"
+      stroke="#4CAF50"
+      stroke-width="5"
+      fill="none"
+    />
+    <circle
+      cx="25"
+      cy="25"
+      r="20"
+      stroke="black"
+      stroke-width="5"
+      fill="none"
+      stroke-linecap="round"
+      stroke-dasharray="31.4 94.2"
+      stroke-dashoffset="0"
+    />
+  </svg>
+</div>
+    {% if errorMessage %}
+    <div id="error-message" style="color: red; margin-bottom: 1em;">
+        {{ errorMessage }}
+    </div>
+    {% else %}
+    <div id="error-message" style="color: red; margin-bottom: 1em; display: none;"></div>
+    {% endif %}
+
+    <form method="POST" action="/login" id="login-form">
+        <input type="hidden" name="_csrf" value="{{ csrfToken }}"/>
+        <input type="text" name="username" placeholder="Username" required value="{{ username }}"/>
+        <input style="margin-top: 5px" type="password" name="password" placeholder="Password" required
+               value="{{ password }}"/>
+        <button style="margin-top: 5px" type="submit">Login</button>
+    </form>
 </div>
 {% endblock %}
 
 {% block styles %}
 <style>
-  body {
-    margin: 0;
-    background: #aaa;
-    font-family: sans-serif;
+    body {
+      margin: 0;
+      background: #aaa;
+      font-family: sans-serif;
+    }
+    .login-container {
+      max-width: 400px;
+      margin: 100px auto;
+      background: white;
+      border-radius: 10px;
+      padding: 2em;
+      text-align: center;
+    }
+    .logo {
+      margin-bottom: 20px;
+    }
+    .logo img {
+      width: 120px;
+    }
+    input {
+      width: 100%;
+      margin: 0.5em 0;
+      padding: 0.8em;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 0.8em 2em;
+      background: #4CAF50;
+      border: none;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+
+.rotating-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
   }
-  .login-container {
-    max-width: 400px;
-    margin: 100px auto;
-    background: white;
-    border-radius: 10px;
-    padding: 2em;
-    text-align: center;
-  }
-  .logo {
-    margin-bottom: 20px;
-  }
-  .logo img {
-    width: 120px;
-  }
-  input {
-    width: 100%;
-    margin: 0.5em 0;
-    padding: 0.8em;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-  }
-  button {
-    padding: 0.8em 2em;
-    background: #4CAF50;
-    border: none;
-    color: white;
-    font-weight: bold;
-    cursor: pointer;
-    border-radius: 4px;
-  }
+}
+
+    #spinner svg {
+  display: block;
+  margin: 0 auto;
+}
+
+    #spinner svg circle {
+  filter: drop-shadow(0 0 5px #4CAF50aa);
+}
 </style>
 {% endblock %}
 
+{% block scripts %}
+<script>
+    const form = document.getElementById('login-form');
+    const spinner = document.getElementById('spinner');
+    const errorDiv = document.getElementById('error-message');
+
+    form.addEventListener('submit', () => {
+      spinner.style.display = 'block';
+      errorDiv.style.display = 'none';
+    });
+</script>
+{% endblock %}
