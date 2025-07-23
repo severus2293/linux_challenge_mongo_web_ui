@@ -26,4 +26,4 @@
 2. Percentile 99:
 3. CPU (2 ядра, 27 гб RAM максимум) метрики:
 4. График CPU:
-5. Отчет locust приложен в этой же папке (mongo_locust_report.html)
+5. Отчет locust приложен в этой же папке (mongo_locust_report.pdf)
