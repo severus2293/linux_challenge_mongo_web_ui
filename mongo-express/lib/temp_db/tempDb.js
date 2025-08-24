@@ -73,7 +73,7 @@ export async function initTempDb() {
     // Запускаем cron-задачу
     cron.schedule('* * * * *', async () => {
       try {
-        await tempDbManager.cleanupExpired(10);
+        await tempDbManager.cleanupExpired();
         const now = new Date();
         const deleteResult = await db
           .collection(usersCollectionName)
@@ -100,7 +100,10 @@ export function tempDbRoutes(appRouter) {
         logger.error('TempDbManager not initialized');
         throw new Error('TempDbManager not initialized');
       }
-      const result = await tempDbManager.createTempDb();
+
+      const ttl = parseInt(req.query.ttl, 10) || 10; // ttl из query, по умолчанию 10 мин
+      const result = await tempDbManager.createTempDb(ttl);
+
       const db = mongoClient.db('temp_dbs');
       // Добавляем пользователя в appUsers
       const tempUser = {
@@ -109,10 +112,10 @@ export function tempDbRoutes(appRouter) {
         type: 'temp',
         dbName: result.dbName,
         createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 минут жизни
+        expiresAt: result.expiresAt
       };
       await db.collection(usersCollectionName).insertOne(tempUser);
-      logger.info(`Created temporary user: ${result.username}`);
+      logger.info(`Created temporary user: ${result.username} with TTL ${ttl} minutes`);
       res.status(200).json(result);
     } catch (err) {
       logger.error(`Error creating temp DB: ${err.message}`);

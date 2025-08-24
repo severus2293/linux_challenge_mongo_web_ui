@@ -14,41 +14,40 @@ export default class TempDbManager {
   }
 
   // Создание временной базы данных и пользователя с правами dbOwner
-  async createTempDb() {
+  async createTempDb(ttlMinutes = 10) {
     const dbName = `temp_db_${uuidv4().replace(/-/g, '')}`;
     const username = `user_${uuidv4().split('-')[0]}`;
     const password = uuidv4().split('-').pop();
     const targetDb = this.client.db(dbName);
 
-    await this.client.db(dbName).createCollection('initial');
+    await targetDb.createCollection('initial');
     await targetDb.command({
-  	createUser: username,
+    createUser: username,
   	pwd: password,
   	roles: [{ role: 'readWrite', db: dbName }]
     });
-    /*await adminDb.command({
-      createUser: username,
-      pwd: password,
-      roles: [{ role: 'dbOwner', db: dbName }]
-    });*/
+
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
 
     const meta = {
       dbName,
       username,
       password,
-      createdAt: new Date()
+      createdAt: new Date(),
+      expiresAt,
+      ttlMinutes
     };
     await this.metaCollection.insertOne(meta);
 
-    this.logger.info(`Создана временная БД: ${dbName} и пользователь ${username}`);
+    this.logger.info(`Создана временная БД: ${dbName} и пользователь: ${username}, TTL: ${ttlMinutes} минут`);
     return meta;
   }
 
-  // Очистка устаревших баз и пользователей, старше указанного времени в минутах
-  async cleanupExpired(minutes = 10) {
-    const cutoff = new Date(Date.now() - minutes * 60 * 1000);
+  // Очистка устаревших баз и пользователей
+  async cleanupExpired() {
+    const now = new Date();
     const expired = await this.metaCollection.find({
-      createdAt: { $lt: cutoff }
+      expiresAt: { $lte: now }
     }).toArray();
 
     for (const entry of expired) {
