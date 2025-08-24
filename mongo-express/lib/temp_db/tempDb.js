@@ -122,4 +122,27 @@ export function tempDbRoutes(appRouter) {
       res.status(500).json({ error: 'Failed to create temp DB' });
     }
   });
+
+appRouter.post('/delete_temp_db', authorize, async (req, res) => {
+  try {
+    if (!tempDbManager) {
+      throw new Error('TempDbManager not initialized');
+    }
+
+    const { dbName } = req.body;
+    if (!dbName) {
+      return res.status(400).json({ error: 'dbName is required' });
+    }
+
+    const deleted = await tempDbManager.deleteTempDb(dbName);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Temp DB not found' });
+    }
+
+    res.status(200).json({ message: `Temp DB ${dbName} deleted successfully` });
+  } catch (err) {
+    logger.error(`Error deleting temp DB: ${err.message}`);
+    res.status(500).json({ error: 'Failed to delete temp DB' });
+  }
+});
 }

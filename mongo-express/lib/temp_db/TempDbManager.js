@@ -43,6 +43,26 @@ export default class TempDbManager {
     return meta;
   }
 
+  // Удаление временной базы данных и пользователя по имени базы
+  async deleteTempDb(tempDbName) {
+    const entry = await this.metaCollection.findOne({ dbName: tempDbName });
+    if (!entry) {
+      this.logger.warn(`Не найдена временная БД: ${tempDbName}`);
+      return null;
+    }
+    await this.dropData(entry);
+    this.logger.info(
+      `Удалена временная БД: ${entry.dbName} и пользователь: ${entry.username}`
+    );
+    return entry;
+  }
+
+  async dropData(entry){
+    await this.client.db(entry.dbName).dropDatabase();
+    await this.metaCollection.deleteOne({ _id: entry._id });
+    await this.metaDb.collection('appUsers').deleteOne({ username: entry.username });
+  }
+
   // Очистка устаревших баз и пользователей
   async cleanupExpired() {
     const now = new Date();
@@ -52,9 +72,7 @@ export default class TempDbManager {
 
     for (const entry of expired) {
       try {
-        await this.client.db(entry.dbName).dropDatabase();
-        await this.client.db('admin').command({ dropUser: entry.username });
-        await this.metaCollection.deleteOne({ _id: entry._id });
+        await this.dropData(entry);
         this.logger.info(`Удалена устаревшая БД: ${entry.dbName} и пользователь: ${entry.username}`);
       } catch (err) {
         this.logger.error(`Ошибка при удалении ${entry.dbName}: ${err.message}`);
